@@ -1,0 +1,242 @@
+---
+title: "Распределение интервалов между транзакциями"
+author: "Vladimir Silkin"
+date: "20 08 2021"
+output: html_document
+---
+## Распределение интервалов между транзакциями
+
+Известно, что интервалы между сообщениями в онлайн-чате подчиняются степенному распределению [как утверждали ученые из Цюриха и Вены в 2012 году](https://www.nature.com/articles/srep00402), а интервалы между двумя последовательными покупателями подчиняются экспоненциальному распределению, как [утверждает википедия](https://ru.wikipedia.org/wiki/Экспоненциальное_распределение#:~:text=Экспоненциа́льное%20(или%20показа́тельное)%20распределе́ние%20—,имеет%20экспоненциальное%20распределение%20с%20параметром). А вот **автор** [статьи на Хабре про типичные распределения вероятностей](https://habr.com/ru/post/331060/) **со мной бы подрался** за такие суждения, потому что, оказывается, существуют процессы с памятью и без памяти, соответственно, просто проанализирвав любой процесс можно сказать, какому распределению он будет подчиняться.
+
+Я решил сделать резерч интервалов между собственными тратами за последние полгода и понять, какому распределению эти интервалы будут подчиняться. В статье я представляю:
+
+1. Код на R для анализа любых временных интервалов.
+2. Подбор экспоненциального и степенного распределения под данные с помощью метода максимального правдоподобия (MLE). Для экспоненциального я использую `fitdistr()` из пакета `MASS`, а для степенного `fit_power_law()` из пакета `stat`.
+3. Проверку данных на соответствие подобранному распределению с помощью теста Колмогорова-Смирнова с помощью функции `kr.test` из пакета `stat`.
+
+Для начала стоить выгрузить данные из банковского приложения. Как это сделать в Тинькоф или Рокетбанк, можно подсмотреть в [статье на Хабре про статистику расходов по МСС](https://habr.com/ru/post/414349/). Меня интересуют только интервалы размером менее суток, потому что для анализа интервалов продолжительностью более суток моих данных маловато, потому что я не слишком часто сидел в спецприемниках и ходил в горы.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results=FALSE}
+library(data.table) # для работы с дата-фреймами
+
+tr <- fread('operations.csv')
+tr_buy <- tr[`Сумма операции` < 0]
+
+# 1. Переводим строку в числовой формат с помощью strptime()
+tr_buy[, time := strptime(`Дата операции`, "%d.%m.%Y %H:%M:%S")]
+
+# 2. Добавим в датафрейм разность между временем двух последовательных покупок (в секундах)
+tr_buy <- cbind(tr_buy, as.numeric(diff(tr_buy$time)))
+colnames(tr_buy)[17] <- "intervals" #Переименуем колонку для красоты
+
+# 3. Переведем интервалы в часы и сделаем интервалы положительными
+tr_buy$intervals <- tr_buy$intervals / (60*60)*(-1)
+
+# 4. Оставим интервалы меньше 24 часов
+tr_buy <- tr_buy[intervals < 24, ,]
+```
+
+
+### Смотрим на данные глобально
+
+После выгрузки данных посчитаем основные описательные статистики -- медиану и среднее и построим базовые графики - плотность, гистограмму и боксплот.
+
+
+```{r, fig.align = 'center', echo = FALSE, warning = FALSE, results = FALSE, message = FALSE}
+
+library(ggplot2) # для построения графиков
+library(gridExtra) # для соединения графиков
+
+# Медиана и среднее
+med <- median(tr_buy$intervals)
+men <- mean(tr_buy$intervals)
+
+# 1. Строим график функции плотности вероятности
+g1 <- ggplot(data = tr_buy, aes(x = intervals)) + 
+  geom_density(alpha = 0.5) + 
+  coord_cartesian(xlim = c(0, 24)) +
+  labs(x = "Time difference between 2 consecutive transactions (hours)", 
+       y = "Density function",
+       title = "The distribution of time between 2 consecutive transactions of Vladimir Silkin \n") +
+  theme_bw()  
+
+# 2. Строим гистограмму распределения
+g2 <- ggplot(data = tr_buy, aes(x = intervals)) + 
+  geom_histogram(alpha = 0.5, binwidth = 1) + 
+  coord_cartesian(xlim = c(0, 24)) +
+  labs(x = "Time difference between 2 consecutive transactions (hours)", 
+       y = "Histogram") +
+  theme_bw() 
+
+# 3. Строим боксплот
+g3 <- ggplot(data = tr_buy, aes(x = intervals)) + 
+  geom_boxplot(alpha = 0.5)+ 
+  coord_cartesian(xlim = c(0, 24))+
+  labs(x = "Time difference between 2 consecutive transactions (hours)", 
+       y = "Boxplot") +
+  annotate("label", x = med + 1.7, y = 0.15, size = 2.5, label= "median = 1.07", 
+           fill="grey") + 
+  annotate("label", x = med + 1.7, y = -0.15, size = 2.5, label= "mean = 4.03", 
+           fill="grey") + 
+  theme_bw() 
+
+# 4. Соединяем граифик вместе
+grid.arrange(g1, g2, g3, nrow = 3) 
+```
+
+
+Как видно из построенной визуализации, все данные можно поделить на 2 группы -- примерно от 0 до 8 часов и от 8 до 24.
+
+- Распределение **первых** похоже на экспоненциальное или степенное. Состоит из небольших промежутков между тратами и может быть связано с распределением трат внутри определенных патернов действий (сходить на прогулку и в разных местах много чего купить). Это мое оценочное суждение.
+- Распределение вторых похоже на нормальное. Состоит из промежутков между тратами около среднего времени бодрстовавания - 16 часов.
+
+Можно ли объяснить данные указанными распределениями, узнаем чуть позже. Давайте сперва взглянем на них поглубже.
+
+### Берем фокус на двух частях распределения.
+
+Экспоненциальное/степенное, которое связано небольшими промежутками трат. 
+Обозначено на следующем графике <span style = "color:red">**красным цветом**</span>. Околонормальное распределение данных возле среднего промежутка бодрстовавания - 16 часов. Обозначено <span style = "color:blue">**синим цветом**</span>.
+
+```{r, fig.align = 'center', echo = FALSE}
+# Добавим в данные качественную переменную, разделяющую наши данные на 2 распределения
+tr_buy$distr <- ifelse(tr_buy$intervals < 8, 'exp', 'norm')
+
+# Медиана и среднее для экспоненциального распределения
+med_exp <- median(tr_buy[intervals < 8, intervals,])
+mean_exp <- (tr_buy[intervals < 8, intervals,])
+
+# Медиана, среднее и стандартное отклонение для нормального распределения
+med_norm <- median(tr_buy[intervals > 8, intervals,])
+mean_norm <- mean(tr_buy[intervals > 8, intervals,])
+sd_norm <- sd(tr_buy[intervals > 8, intervals,])
+
+# Гистограмма с цветовым разделением данных.
+g1 <- ggplot(data = tr_buy, aes(x = intervals, fill = distr)) + 
+  geom_histogram(alpha = 0.5, binwidth = 1, show.legend = FALSE) + 
+  coord_cartesian(xlim = c(0, 24)) +
+  labs(x = "Time difference between 2 consecutive transactions (hours)", 
+       y = "Histogram") +
+  theme_bw() 
+
+# Двойной боксплот так же с разделением.
+g2 <- ggplot(data = tr_buy, aes(x = intervals, fill = distr)) + 
+  geom_boxplot(alpha = 0.5, show.legend = FALSE)+ 
+  labs(x = "Time difference between 2 consecutive transactions (hours)", 
+       y = "Boxplot") +
+  
+  annotate("label", x = 15.7, y = -0.1, 
+           size = 4, 
+           label= "median = 15.69",
+           fill="blue", alpha = 0.25) + 
+  annotate("label", x = 15.7, y = -0.2, 
+           size = 4, 
+           label= "mean = 15.77", 
+           fill="blue", alpha = 0.25) + 
+  annotate("label", x = 15.7, y = -0.3, 
+           size = 4, 
+           label= "sd = 3.88", 
+           fill="blue", alpha = 0.25) + 
+    
+  annotate("label", x = 2, y = 0.25, 
+           size = 4, 
+           label= "median = 0.53",
+           fill="red", alpha = 0.2) + 
+  annotate("label", x = 2, y = 0.15, 
+           size = 4, 
+           label= "mean = 1.35", 
+           fill="red", alpha = 0.2) + 
+
+  coord_cartesian(xlim = c(0, 24)) +
+  theme_bw() 
+
+# 4. Соединяем график вместе
+grid.arrange(g1, g2, nrow = 2) 
+```
+
+
+
+### 1. Проверка на нормальность
+
+Сперва разберемся с нормальным распределением. Насколько оно нормально?
+
+```{r}
+shapiro.test(tr_buy[intervals > 8, intervals])
+```
+Мы получили p-уровень значимости порядка 0.01. То есть если наши данные действительно подчиняются нормальному распределению, то вероятность получить такие и сколько угодно более выраженные отклонения от нормальности случайно равняется 1%. Я не стану отклонять гипотезу о том, что наши данные взяты из генеральной совокупности с нормальным распределением признака.
+
+### 2. Подбор экспоненциального и степенного распределений
+
+Теперь попробуем фитануть плотность вероятности с помощью двух распределений - экспоненциального и степенного. Они перед вами.
+
+\begin{gather}
+
+f_{exp}(x) = \alpha \, e^{-\alpha \, x} \\
+f_{pow}(x) = x^{-\alpha} 
+
+\end{gather}
+
+> В работе Data-Scientist`а нет ничего сложного. Главное -- подгрузить нужные библиотеки. ([Маэстро](https://stepik.org/lesson/216065/step/4?unit=188927))
+
+```{r, warning = FALSE, message = FALSE}
+library(MASS) # Для подбора экспоненциального распределения с помощью fitdistr()
+library(igraph) # Для подбора степенного распределения с помощью fit_power_law()
+library(stats) # Для проведения теста Колмогорова-Смирнова
+```
+
+**Фитуем данные экспоненциальным распределением:**
+```{r}
+fit_e <- fitdistr(tr_buy[intervals < 8, intervals], "exponential") 
+# fit_e$estimate[1][[1]] # alpha
+# fit_e$sd[1][[1]] # alpha_error
+```
+Получим $\alpha \approx 0.74$ с ошибкой $error_{\alpha} = 0.02$. С помощью теста Колмогорова-Смирнова смотрим, насколько подобранное распределение хорошо объясняет наши данные.
+```{r, warning = FALSE, message = FALSE, results = FALSE}
+ks.test(tr_buy[intervals < 8, intervals], "pexp", fit_e$estimate)$p.value #p.value
+```
+Получим $p.value \approx 0$, но что это значит?
+
+Физический смысл результатов теста состоит в следующем: если в генеральной совокупности данные, действительно, распределены, экспоненциально, то вероятность получить такие и сколь угодно выраженные отклонения от экспоненциального распределения случайно, практически равна нулю. То есть в p.value находится вероятность получить нашу выборку и любую другую выборку, хоть сколько-нибудь отличающуюся от идеальной выборки экспоненциальных данных сильнее нашей.
+
+**Фитуем данные степенным распределением:**
+```{r, warning = FALSE, message = FALSE}
+fit_p <- fit_power_law(tr_buy[intervals < 8, intervals], implementation = 'plfit')
+# fit_p$alpha
+# fit_p$KS.p
+```
+Получим $\alpha \approx 2.17$ и $p.value \approx 10^{-5}$.
+
+В случае со степенным распределеним p.value повышается, но все равно не достигает ни одного общепринятого порога значимости.
+
+Давайте, посмотрем, как будут выглядить наши фиты на графике. <br>
+
+- <span style = "color:blue">**синим цветом**</span> выделено экспоненциальное распределение.
+- <span style = "color:red">**красным цветом**</span> выделено степенное распределение.
+
+```{r, fig.align = 'center', echo = FALSE, warning = FALSE, results = FALSE, message = FALSE}
+plaw <- function(x, a) {x^(-a)}
+
+gf <- ggplot(data = tr_buy[intervals < 8], aes(x = intervals)) + 
+  geom_density(size = 1) + 
+  geom_histogram(alpha = 0.5, 
+                 aes(y = stat(count) / sum(count)), 
+                 binwidth = 0.5)+
+  
+  stat_function(fun = dexp, args = list(0.738317), size = 1, colour = 'blue') +
+  stat_function(fun = plaw,  args = list(2.171511), size = 1, colour = 'red') +
+
+  
+  coord_cartesian(xlim = c(0, 8),
+                  ylim = c(0, 0.5))+
+  labs(x = "Time difference between 2 consecutive transactions (hours)", 
+       y = "Density function",
+       title = "The distribution of time between 2 consecutive transactions of Vladimir Silkin \n") +
+  theme_bw() 
+
+gf
+```
+
+## Выводы
+
+Я буду рад, если моя статья оказалось кому-то полезной.
+
+Если копать глубже, дальше и больше, то интересно было бы выяснить физический смысл медианы распределения интервалов. Сейчас мне кажется, что она неким образом характеризует способность человека принимать спонтанные решения о покупках, поэтому было бы интересно проанализировать ее поведение в зависимости от возраста человека и, возможно, найти интересные корреляции.
