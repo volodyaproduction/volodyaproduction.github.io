@@ -14268,7 +14268,7 @@ a.anchor-link {
 <div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
 <p>В данном ноутбуке я демонстрирую алгоритм построения предсказательной модели, ранжирующей наблюдения по вероятности принять целевое значение на основе 12 признаков (дохода, наличия детей, недвижимости, частной собственности и тд.).</p>
-<p>Ноутбук включает в себя разведовательный анализ данных, выбор наилучшей модели модели, анализ ее качества и калибровку.</p>
+<p>Ноутбук включает в себя разведовательный анализ данных, выбор наилучшей модели, анализ ее качества и калибровку.</p>
 
 </div>
 </div>
@@ -15559,6 +15559,18 @@ val_final: 208
 
 </div>
 
+</div>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Brier score характеризует ошибку калибровки.</p>
+
+</div>
+</div>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><a id = 'quality'></a></p>
+
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-InputArea jp-Cell-inputArea">
@@ -15631,12 +15643,6 @@ val_final: 208
 </div>
 <div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<p><a id = 'quality'></a></p>
-
-</div>
-</div>
-<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
-</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
 <p>Выше представлены кривая калибровки и распределение вероятностей на итоговом сете (val_final) <strong>ПОСЛЕ проведения калибровки</strong>!</p>
 
 </div>
@@ -15679,7 +15685,12 @@ val_final: 208
 <div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
 <p>Brier score характеризует ошибку калибровки. Эта метрика упала, но не значительно.</p>
-<p>Таким образом, <strong>нельзя утверждать, что оталиброванный алгоритм выдает вероятнсти в большей степени имеющие смысл реальной вероятности, чем неоткалиброванный.</strong> Это связано, скорее всего, с небольшим объемом данных.</p>
+
+</div>
+</div>
+<div class="jp-Cell-inputWrapper"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Таким образом, <strong>нельзя утверждать, что оталиброванный алгоритм выдает вероятнсти в большей степени имеющие смысл реальной вероятности, чем неоткалиброванный.</strong> Это связано, скорее всего, с небольшим объемом используемых данных.</p>
 
 </div>
 </div>
@@ -16018,12 +16029,13 @@ val_final: 208
 </li>
 </ol>
 <ol>
-<li><p>К алгоритмам LogReg, Random Forest, Gradient Boosting, XGBoost, K-means Classifier, Neural Network подобраны наилучшие параметры с помощью RandomizedSearchCV. Представлена <a href="#table">таблица с метриками на валидационном датасете</a> (данных, которых ни один алгоритм ни разу не видел). В качестве итогового алгоритма выбран Random Forest с подбором иделальной модели на GridSearchCV.<br><br></p>
-</li>
-<li><p>Проведена <a href="#calib_prob">калибровка модели Random Forest</a>. <br><br></p>
-</li>
-<li><p>Тестовая выборка отранжирована по вероятности принять целевой признак.</p>
-</li>
+<li>К алгоритмам LogReg, Random Forest, Gradient Boosting, XGBoost, K-means Classifier, Neural Network подобраны наилучшие параметры с помощью RandomizedSearchCV. Представлена <a href="#table">таблица с метриками на валидационном датасете</a> (данных, которых ни один алгоритм ни разу не видел). В качестве итогового алгоритма выбран Random Forest с подбором иделальной модели на GridSearchCV.</li>
+</ol>
+<ol>
+<li>Выполнена <a href="#calib_prob">калибровка модели Random Forest</a>.</li>
+</ol>
+<ol>
+<li>Тестовая выборка отранжирована по вероятности принять целевой признак.</li>
 </ol>
 
 </div>
